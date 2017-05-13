@@ -30,7 +30,7 @@ if __name__ == '__main__':
     n_samples = 1000
     batch_size = 100
     len_data = 10
-    n_iter = 1000
+    n_iter = 10000
     
     removeFileInDir("tf_writer")
 

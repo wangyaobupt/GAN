@@ -4,7 +4,7 @@ import tensorflow as tf
 class GANForTimeSeq:
     log_path = 'tf_writer'
 
-    def __init__(self, lenOfTimeSeq, lr_g=0.001, lr_d=0.001, useGPU=True):
+    def __init__(self, lenOfTimeSeq, lr_g=0.01, lr_d=0.01, useGPU=True):
         self.useGPU = useGPU
         self.seq_len = lenOfTimeSeq
         self.lr_g = lr_g
@@ -90,17 +90,18 @@ class GANForTimeSeq:
             for batchIdx in range(n_batches):
                 gnd_truth_batch = gnd_truth_tensor[batchIdx*batch_size:(batchIdx+1)*batch_size]
                 
-                self.sess.run(self.train_g, 
-                        feed_dict={self.batch_size_t:batch_size, self.groundTruthTensor:gnd_truth_batch})
+                for index in range(2):
+                    self.sess.run(self.train_g, 
+                            feed_dict={self.batch_size_t:batch_size, self.groundTruthTensor:gnd_truth_batch})
 
-
-                self.sess.run(self.train_d, 
+                for index in range(3):
+                    self.sess.run(self.train_d, 
                         feed_dict={self.batch_size_t:batch_size, self.groundTruthTensor:gnd_truth_batch})
 
                 summary, g_logit = self.sess.run([self.merged,self.g_logit], 
                         feed_dict={self.batch_size_t:batch_size, self.groundTruthTensor:gnd_truth_batch})
 
-                self.tf_writer.add_summary(summary, iterIdx*n_batches + batchIdx)
+            self.tf_writer.add_summary(summary, iterIdx)
             self.tf_writer.flush()
             if iterIdx % 100 == 0:
                 print 'IterIdx=', iterIdx, ' g_logit[0]=', g_logit[0]
