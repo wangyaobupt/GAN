@@ -4,6 +4,7 @@
 
 import numpy as np
 from ganForTimeSeq import GANForTimeSeq
+import os
 
 def genData(n_samples, len_data):
     result = np.ones((n_samples, len_data, 1))
@@ -14,12 +15,26 @@ def genData(n_samples, len_data):
             result[sampleIdx][seqIdx][0] = result[sampleIdx][seqIdx-1][0] + step_vector[sampleIdx][0]
     return result
 
+def removeFileInDir(targetDir): 
+    for file in os.listdir(targetDir): 
+        targetFile = os.path.join(targetDir,  file) 
+        if os.path.isfile(targetFile):
+            print ('Delete Old Log FIle:', targetFile)
+            os.remove(targetFile)
+        elif os.path.isdir(targetFile):
+            print ('Delete olds in log dir: ', targetFile)
+            removeFileInDir(targetFile)
+
+
 if __name__ == '__main__':
     n_samples = 1000
     batch_size = 100
     len_data = 10
     n_iter = 1000
     
+    removeFileInDir("tf_writer")
+
+
     gndTruthData = genData(n_samples, len_data);
 
     gan = GANForTimeSeq(len_data)
