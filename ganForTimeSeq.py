@@ -53,6 +53,15 @@ class GANForTimeSeq:
             d_loss = d_loss_ground_truth + d_loss_fake
             tf.summary.scalar('d_loss',d_loss)
 
+        with tf.name_scope('Accuracy'):
+            correct_pred_gnd_truth = tf.equal(tf.argmax(self.d_logit_gnd_truth, 1), tf.argmax(self.genOneHotVector(0), 1))
+            d_accuracy_gnd_truth = tf.reduce_mean(tf.cast(correct_pred_gnd_truth, tf.float32))
+            tf.summary.scalar('d_acc_gnd_truth',d_accuracy_gnd_truth)
+            
+            correct_pred_fake = tf.equal(tf.argmax(self.d_logit_fake, 1), tf.argmax(self.genOneHotVector(1), 1))
+            d_accuracy_fake = tf.reduce_mean(tf.cast(correct_pred_fake, tf.float32))
+            tf.summary.scalar('d_acc_fake', d_accuracy_fake)
+
         # Optimize ops
         self.train_g = tf.train.AdamOptimizer(self.lr_g).minimize(g_loss)
         self.train_d = tf.train.AdamOptimizer(self.lr_d).minimize(d_loss)
