@@ -34,8 +34,7 @@ if __name__ == '__main__':
     
     removeFileInDir("tf_writer")
 
-
     gndTruthData = genData(n_samples, len_data);
 
-    gan = GANForTimeSeq(len_data)
+    gan = GANForTimeSeq(len_data, lr_g=1e-2, lr_d=0.1)
     gan.train(batch_size, n_iter, gndTruthData)

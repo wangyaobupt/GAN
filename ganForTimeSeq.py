@@ -4,7 +4,7 @@ import tensorflow as tf
 class GANForTimeSeq:
     log_path = 'tf_writer'
 
-    def __init__(self, lenOfTimeSeq, lr_g=0.01, lr_d=0.01, useGPU=True):
+    def __init__(self, lenOfTimeSeq, lr_g=0.001, lr_d=0.001, useGPU=True):
         self.useGPU = useGPU
         self.seq_len = lenOfTimeSeq
         self.lr_g = lr_g
@@ -15,8 +15,8 @@ class GANForTimeSeq:
         self.batch_size_t = tf.placeholder(tf.int32, None)
         
         # g_network data flow
-        g_inputTensor = tf.random_uniform([self.batch_size_t, self.seq_len], minval=0, maxval=10)
-        g_logit = self.generator(g_inputTensor)
+        self.g_inputTensor = tf.placeholder(tf.float32, shape=(None, self.seq_len)) 
+        g_logit = self.generator(self.g_inputTensor)
         
         # d-network data flow
         self.groundTruthTensor = tf.placeholder(tf.float32,shape=(None, self.seq_len, 1),name='gndTruth')
@@ -28,37 +28,41 @@ class GANForTimeSeq:
         with tf.name_scope('Loss'):
             # For G-network, the more generated data is judged as "TRUE", the less the loss would be
             g_loss = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits(
-                    labels=self.genOneHotVector(0),
-                    logits=self.d_logit_fake),
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    logits=self.d_logit_fake,
+                    labels=tf.ones(shape=[self.batch_size_t,1])
+                    ),
                 name='g_loss'
                 )
             tf.summary.scalar('g_loss',g_loss)
             
             # For D-network, jduge ground truth to TRUE, jduge G-network output to FALSE,making loss low
             d_loss_ground_truth = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits(
-                    labels=self.genOneHotVector(0),
-                    logits=self.d_logit_gnd_truth),
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    logits=self.d_logit_gnd_truth,
+                    labels=tf.ones(shape=[self.batch_size_t,1])
+                    ),
                 name='d_loss_gnd'
                 )
             tf.summary.scalar('d_loss_gnd_truth',d_loss_ground_truth)
             d_loss_fake = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits(
-                    labels=self.genOneHotVector(1),
-                    logits=self.d_logit_fake),
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    logits=self.d_logit_fake,
+                    labels=tf.zeros(shape=[self.batch_size_t,1])
+                    ),
                 name='d_loss_fake'
                 )
             tf.summary.scalar('d_loss_fake',d_loss_fake)
             d_loss = d_loss_ground_truth + d_loss_fake
+            #d_loss = d_loss_ground_truth 
             tf.summary.scalar('d_loss',d_loss)
 
         with tf.name_scope('Accuracy'):
-            correct_pred_gnd_truth = tf.equal(tf.argmax(self.d_logit_gnd_truth, 1), tf.argmax(self.genOneHotVector(0), 1))
+            correct_pred_gnd_truth = tf.greater(self.d_logit_gnd_truth, tf.zeros([self.batch_size_t, 1]))
             d_accuracy_gnd_truth = tf.reduce_mean(tf.cast(correct_pred_gnd_truth, tf.float32))
             tf.summary.scalar('d_acc_gnd_truth',d_accuracy_gnd_truth)
             
-            correct_pred_fake = tf.equal(tf.argmax(self.d_logit_fake, 1), tf.argmax(self.genOneHotVector(1), 1))
+            correct_pred_fake = tf.less(self.d_logit_fake, tf.zeros([self.batch_size_t, 1]))
             d_accuracy_fake = tf.reduce_mean(tf.cast(correct_pred_fake, tf.float32))
             tf.summary.scalar('d_acc_fake', d_accuracy_fake)
 
@@ -69,7 +73,7 @@ class GANForTimeSeq:
         # visualize and model saving
         self.merged = tf.summary.merge_all()
         all_vars = tf.global_variables()
-        saver = tf.train.Saver(all_vars)
+        self.saver = tf.train.Saver(all_vars)
         if self.useGPU:
             self.sess = tf.Session()
         else:
@@ -84,28 +88,41 @@ class GANForTimeSeq:
     # gnd_ruth_tensor: ground truth tensor, in shape of (n_samples, seq_len, 1)
     def train(self, batch_size, numIteration, gnd_truth_tensor):
         n_samples = gnd_truth_tensor.shape[0]
+        sample_len = gnd_truth_tensor.shape[1]
         n_batches = n_samples / batch_size
         print 'n_samples=',n_samples, ' ,n_batches=',n_batches
         for iterIdx in range(numIteration):
             for batchIdx in range(n_batches):
                 gnd_truth_batch = gnd_truth_tensor[batchIdx*batch_size:(batchIdx+1)*batch_size]
+                g_net_input = np.random.uniform(-1,1,(batch_size,sample_len))
                 
-                for index in range(2):
-                    self.sess.run(self.train_g, 
-                            feed_dict={self.batch_size_t:batch_size, self.groundTruthTensor:gnd_truth_batch})
-
-                for index in range(3):
+                for index in range(1):
                     self.sess.run(self.train_d, 
-                        feed_dict={self.batch_size_t:batch_size, self.groundTruthTensor:gnd_truth_batch})
+                        feed_dict={
+                            self.batch_size_t:batch_size, 
+                            self.groundTruthTensor:gnd_truth_batch, 
+                            self.g_inputTensor:g_net_input})
 
-                summary, g_logit = self.sess.run([self.merged,self.g_logit], 
-                        feed_dict={self.batch_size_t:batch_size, self.groundTruthTensor:gnd_truth_batch})
+                for index in range(0):
+                    self.sess.run(self.train_g, 
+                            feed_dict={
+                                self.batch_size_t:batch_size, 
+                                self.groundTruthTensor:gnd_truth_batch,
+                                self.g_inputTensor:g_net_input})
+
+                summary, g_logit, d_logit_fake,d_logit_gnd_truth = self.sess.run([self.merged,self.g_logit,self.d_logit_fake, self.d_logit_gnd_truth], 
+                        feed_dict={
+                            self.batch_size_t:batch_size, 
+                            self.groundTruthTensor:gnd_truth_batch,
+                            self.g_inputTensor:g_net_input})
 
             self.tf_writer.add_summary(summary, iterIdx)
             self.tf_writer.flush()
             if iterIdx % 100 == 0:
                 print 'IterIdx=', iterIdx, ' g_logit[0]=', g_logit[0]
-
+                print 'gnd_truth[0] = ', gnd_truth_batch[0]
+                print 'sigmoid(d_logit_fake[0]) = ', tf.sigmoid(d_logit_fake[0]).eval(session=self.sess),' sigmoid(d_logit_gnd_truth[0]) = ', tf.sigmoid(d_logit_gnd_truth[0]).eval(session=self.sess),
+                self.save_model_checkpoint(GANForTimeSeq.log_path+'/', iterIdx)
 
     # generative network
     # use multi-layer percepton to generate time sequence from random noise
@@ -118,16 +135,18 @@ class GANForTimeSeq:
             tf.summary.histogram('activation_fc1', activation_fc1)
             activation_fc2 = self.fullConnectedLayer(activation_fc1, self.seq_len, 2);
             tf.summary.histogram('activation_fc2', activation_fc2)
-            g_logit = activation_fc2
+            activation_fc3 = self.fullConnectedLayer(activation_fc1, self.seq_len, 3);
+            tf.summary.histogram('activation_fc3', activation_fc3)
+            g_logit = activation_fc3
             g_logit = tf.identity(g_logit, 'g_logit')
             return g_logit
 
     # discriminate network#
-    # Use LSTM to judge whethwer the input tensor is "ground truth"(1,0) or "generated by G-net"(0,1)
+    # Use LSTM to judge whethwer the input tensor is "ground truth"(1) or "generated by G-net"(0)
     # inputTensor must be in shape of (batch_size, seq_len, 1)
     def discriminator(self, inputTensor,reuseCell):
         with tf.name_scope('D_net'):
-            num_units_in_LSTMCell = self.n_classes
+            num_units_in_LSTMCell = 1 
             lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell, reuse=reuseCell)
             init_state = lstmCell.zero_state(self.batch_size_t, dtype=tf.float32)
             raw_output, final_state = tf.nn.dynamic_rnn(lstmCell, inputTensor, initial_state=init_state)
@@ -148,3 +167,7 @@ class GANForTimeSeq:
         indices = tf.ones([self.batch_size_t],dtype=tf.int32)*class_idx
         result = tf.one_hot(indices, depth=self.n_classes, on_value = 1.0, off_value = 0.0)
         return result;
+
+    def save_model_checkpoint(self, path, step_idx):
+        self.saver.save(self.sess, path + "model.ckpt", global_step=step_idx)
+        print("Model saved as " + path + "model.ckpt")
