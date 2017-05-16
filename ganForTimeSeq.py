@@ -131,13 +131,16 @@ class GANForTimeSeq:
         with tf.name_scope('G_net'):
             numberOfInputDims = self.seq_len
             gInputTensor = tf.identity(inputTensor, name='input')
-            activation_fc1 = self.fullConnectedLayer(gInputTensor, self.seq_len, 1);
+            activation_fc1,z_fc1 = self.fullConnectedLayer(gInputTensor, self.seq_len, 1);
+            tf.summary.histogram('z_fc1', z_fc1)
             tf.summary.histogram('activation_fc1', activation_fc1)
-            activation_fc2 = self.fullConnectedLayer(activation_fc1, self.seq_len, 2);
+            activation_fc2,z_fc2 = self.fullConnectedLayer(activation_fc1, self.seq_len, 2);
+            tf.summary.histogram('z_fc2', z_fc2)
             tf.summary.histogram('activation_fc2', activation_fc2)
-            activation_fc3 = self.fullConnectedLayer(activation_fc1, self.seq_len, 3);
+            activation_fc3,z_fc3 = self.fullConnectedLayer(activation_fc1, self.seq_len, 3);
+            tf.summary.histogram('z_fc3', z_fc3)
             tf.summary.histogram('activation_fc3', activation_fc3)
-            g_logit = activation_fc3
+            g_logit = z_fc3
             g_logit = tf.identity(g_logit, 'g_logit')
             return g_logit
 
@@ -146,22 +149,26 @@ class GANForTimeSeq:
     # inputTensor must be in shape of (batch_size, seq_len, 1)
     def discriminator(self, inputTensor,reuseCell):
         with tf.name_scope('D_net'):
-            num_units_in_LSTMCell = 1 
-            lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell, reuse=reuseCell)
-            init_state = lstmCell.zero_state(self.batch_size_t, dtype=tf.float32)
+            num_units_in_LSTMCell = 10
+            lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell)
+            init_state = lstmCell.zero_state(100, dtype=tf.float32)
             raw_output, final_state = tf.nn.dynamic_rnn(lstmCell, inputTensor, initial_state=init_state)
-            output_logits = tf.unstack(tf.transpose(raw_output, [1, 0, 2]), name='outList')
-            d_logit = output_logits[-1];
+            rnn_output_list = tf.unstack(tf.transpose(raw_output, [1, 0, 2]), name='outList')
+            rnn_output_tensor = rnn_output_list[-1];
+            d_sigmoid, d_logit = self.fullConnectedLayer(rnn_output_tensor, 1, 1)
             d_logit = tf.identity(d_logit, 'd_net_logit')
             return d_logit
    
     def fullConnectedLayer(self, inputTensor, numOfNodesInLayer, index):
-        layerIdxStr = 'fc'+ str(index)
+        layerIdxStr = 'fc' + str(index)
         numberOfInputDims = inputTensor.shape[1].value
-        w = tf.Variable(initial_value=tf.random_normal([numberOfInputDims, numOfNodesInLayer]), name=('w_'+layerIdxStr))
-        b = tf.Variable(tf.zeros([1, numOfNodesInLayer]), name='b_'+layerIdxStr)
-        a = tf.nn.sigmoid(tf.matmul(inputTensor, w) + b, name='a_'+layerIdxStr)
-        return a
+        w = tf.Variable(initial_value=tf.random_normal([numberOfInputDims, numOfNodesInLayer]),
+                        name=('w_' + layerIdxStr))
+        b = tf.Variable(tf.zeros([1, numOfNodesInLayer]), name='b_' + layerIdxStr)
+        z = tf.matmul(inputTensor, w) + b
+        z = tf.identity(z, name='z_' + layerIdxStr)
+        a = tf.nn.sigmoid(z, name='a_' + layerIdxStr)
+        return a, z
 
     def genOneHotVector(self, class_idx):
         indices = tf.ones([self.batch_size_t],dtype=tf.int32)*class_idx
