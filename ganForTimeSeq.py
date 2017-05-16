@@ -54,7 +54,6 @@ class GANForTimeSeq:
                 )
             tf.summary.scalar('d_loss_fake',d_loss_fake)
             d_loss = d_loss_ground_truth + d_loss_fake
-            #d_loss = d_loss_ground_truth 
             tf.summary.scalar('d_loss',d_loss)
 
         with tf.name_scope('Accuracy'):
@@ -67,8 +66,14 @@ class GANForTimeSeq:
             tf.summary.scalar('d_acc_fake', d_accuracy_fake)
 
         # Optimize ops
-        self.train_g = tf.train.AdamOptimizer(self.lr_g).minimize(g_loss)
-        self.train_d = tf.train.AdamOptimizer(self.lr_d).minimize(d_loss)
+        g_net_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='G_net')
+        #tf.summary.text('g_net_var_lit', g_net_var_list)
+        print g_net_var_list
+        self.train_g = tf.train.AdamOptimizer(self.lr_g).minimize(g_loss,var_list=g_net_var_list)
+        d_net_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='D_net')
+        #tf.summary.text('d_net_var_lit', d_net_var_list)
+        print d_net_var_list
+        self.train_d = tf.train.AdamOptimizer(self.lr_d).minimize(d_loss,var_list=d_net_var_list)
 
         # visualize and model saving
         self.merged = tf.summary.merge_all()
@@ -103,7 +108,7 @@ class GANForTimeSeq:
                             self.groundTruthTensor:gnd_truth_batch, 
                             self.g_inputTensor:g_net_input})
 
-                for index in range(0):
+                for index in range(10):
                     self.sess.run(self.train_g, 
                             feed_dict={
                                 self.batch_size_t:batch_size, 
@@ -150,7 +155,7 @@ class GANForTimeSeq:
     def discriminator(self, inputTensor,reuseCell):
         with tf.name_scope('D_net'):
             num_units_in_LSTMCell = 10
-            lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell)
+            lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell,reuse=reuseCell)
             init_state = lstmCell.zero_state(100, dtype=tf.float32)
             raw_output, final_state = tf.nn.dynamic_rnn(lstmCell, inputTensor, initial_state=init_state)
             rnn_output_list = tf.unstack(tf.transpose(raw_output, [1, 0, 2]), name='outList')
