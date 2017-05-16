@@ -3,14 +3,25 @@ import numpy as np
 
 def discriminator(inputTensor,reuseCell):
     with tf.name_scope('D_net'):
-        num_units_in_LSTMCell = 1 
-        lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell, reuse=reuseCell)
+        num_units_in_LSTMCell = 10
+        lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell)
         init_state = lstmCell.zero_state(100, dtype=tf.float32)
         raw_output, final_state = tf.nn.dynamic_rnn(lstmCell, inputTensor, initial_state=init_state)
-        output_logits = tf.unstack(tf.transpose(raw_output, [1, 0, 2]), name='outList')
-        d_logit = output_logits[-1];
+        rnn_output_list = tf.unstack(tf.transpose(raw_output, [1, 0, 2]), name='outList')
+        rnn_output_tensor = rnn_output_list[-1];
+        d_sigmoid, d_logit = fullConnectedLayer(rnn_output_tensor, 1, 1)
         d_logit = tf.identity(d_logit, 'd_net_logit')
         return d_logit
+
+def fullConnectedLayer(inputTensor, numOfNodesInLayer, index):
+    layerIdxStr = 'fc'+ str(index)
+    numberOfInputDims = inputTensor.shape[1].value
+    w = tf.Variable(initial_value=tf.random_normal([numberOfInputDims, numOfNodesInLayer]), name=('w_'+layerIdxStr))
+    b = tf.Variable(tf.zeros([1, numOfNodesInLayer]), name='b_'+layerIdxStr)
+    z = tf.matmul(inputTensor, w) + b
+    z = tf.identity(z, name='z_'+layerIdxStr)
+    a = tf.nn.sigmoid(z, name='a_'+layerIdxStr)
+    return a, z
 
 def genData(n_samples, len_data):
     result = np.ones((n_samples, len_data, 1))
@@ -72,7 +83,7 @@ if __name__ == '__main__':
                     d_inputTensor:data_batch, 
                     label_tensor:label_batch})
 
-            d_log = sess.run(d_logit,
+            d_log,loss_value = sess.run([d_logit,loss],
                 feed_dict={
                     d_inputTensor:data_batch, 
                     label_tensor:label_batch})
@@ -81,4 +92,5 @@ if __name__ == '__main__':
         if iterIdx%100 == 0:
             print 'IterIdx=', iterIdx, ' d_logit[0]=', d_log[0]
             print 'data_batch[0] = ', data_batch[0],'label_batch[0]=', label_batch[0]
+            print 'lossValue = ', loss_value
 
