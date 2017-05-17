@@ -22,9 +22,11 @@ class GANForTimeSeq:
         # d-network data flow
         self.groundTruthTensor = tf.placeholder(tf.float32,shape=(None, self.seq_len, 1),name='gndTruth')
         self.sum_gnd_truth = tf.summary.tensor_summary('gnd_truth', self.groundTruthTensor)
+        tf.summary.histogram('gnd_truth', self.groundTruthTensor)
         self.d_logit_gnd_truth = self.discriminator(self.groundTruthTensor, None)
         self.sum_d_logit_gnd = tf.summary.tensor_summary('d_logit_gnd_truth', self.d_logit_gnd_truth)
         self.g_logit = tf.reshape(g_logit, [-1, self.seq_len, 1])
+        tf.summary.histogram('g_logit', self.g_logit)
         self.sum_g_logit = tf.summary.tensor_summary('g_logit', self.g_logit)
         self.d_logit_fake = self.discriminator(self.g_logit, True)
         self.sum_d_logit_fake = tf.summary.tensor_summary('d_logit_fake', self.d_logit_fake)
@@ -72,11 +74,11 @@ class GANForTimeSeq:
 
         # Optimize ops
         g_net_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='G_net')
-        #tf.summary.text('g_net_var_lit', g_net_var_list)
+        g_net_var_list = g_net_var_list +  tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='g_rnn')
         print g_net_var_list
         self.train_g = tf.train.AdamOptimizer(self.lr_g).minimize(g_loss,var_list=g_net_var_list)
         d_net_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='D_net')
-        #tf.summary.text('d_net_var_lit', d_net_var_list)
+        d_net_var_list = d_net_var_list +  tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='d_rnn')
         print d_net_var_list
         self.train_d = tf.train.AdamOptimizer(self.lr_d).minimize(d_loss,var_list=d_net_var_list)
 
@@ -141,18 +143,33 @@ class GANForTimeSeq:
     # input tensor must be in shape of (batch_size, self.seq_len)
     def generator(self, inputTensor):
         with tf.name_scope('G_net'):
-            numNodesInEachLayer = 10
-            numLayers = 5 
-            
             gInputTensor = tf.identity(inputTensor, name='input')
-            previous_output_tensor = gInputTensor
-            for layerIdx in range(numLayers):
-                activation,z = self.fullConnectedLayer(previous_output_tensor, numNodesInEachLayer, layerIdx)
-                previous_output_tensor = activation
-                tf.summary.histogram('z_'+str(layerIdx), z)
-                tf.summary.histogram('activation_fc'+str(layerIdx), activation)
-            g_logit = z
-            g_logit = tf.identity(g_logit, 'g_logit')
+            ## Multilayer percepton implementation
+            #numNodesInEachLayer = 10
+            #numLayers = 5 
+            #
+            #previous_output_tensor = gInputTensor
+            #for layerIdx in range(numLayers):
+            #    activation,z = self.fullConnectedLayer(previous_output_tensor, numNodesInEachLayer, layerIdx)
+            #    previous_output_tensor = activation
+            #    tf.summary.histogram('z_'+str(layerIdx), z)
+            #    tf.summary.histogram('activation_fc'+str(layerIdx), activation)
+            #g_logit = z
+            #g_logit = tf.identity(g_logit, 'g_logit')
+            
+            ## LSTM implementation
+            seq_len = int(gInputTensor.shape[1])
+            max_time = seq_len
+            gInputTensor = tf.reshape(gInputTensor,[-1,max_time,1])
+            num_units_in_LSTMCell = 10
+            with tf.variable_scope('g_rnn'):
+                lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell)
+                init_state = lstmCell.zero_state(self.batch_size_t, dtype=tf.float32)
+                raw_output, final_state = tf.nn.dynamic_rnn(lstmCell, gInputTensor, initial_state=init_state)
+            rnn_output_list = tf.unstack(tf.transpose(raw_output, [1, 0, 2]), name='outList')
+            rnn_output_tensor = rnn_output_list[-1];
+            g_sigmoid, g_logit = self.fullConnectedLayer(rnn_output_tensor, seq_len , 1)
+            g_logit = tf.identity(g_logit, 'g_net_logit')
             return g_logit
 
     # discriminate network#
@@ -161,9 +178,12 @@ class GANForTimeSeq:
     def discriminator(self, inputTensor,reuseCell):
         with tf.name_scope('D_net'):
             num_units_in_LSTMCell = 10
-            lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell,reuse=reuseCell)
-            init_state = lstmCell.zero_state(self.batch_size_t, dtype=tf.float32)
-            raw_output, final_state = tf.nn.dynamic_rnn(lstmCell, inputTensor, initial_state=init_state)
+            
+            with tf.variable_scope('d_rnn'):
+                lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell,reuse=reuseCell)
+                init_state = lstmCell.zero_state(self.batch_size_t, dtype=tf.float32)
+                raw_output, final_state = tf.nn.dynamic_rnn(lstmCell, inputTensor, initial_state=init_state)
+            
             rnn_output_list = tf.unstack(tf.transpose(raw_output, [1, 0, 2]), name='outList')
             rnn_output_tensor = rnn_output_list[-1];
             d_sigmoid, d_logit = self.fullConnectedLayer(rnn_output_tensor, 1, 1)
