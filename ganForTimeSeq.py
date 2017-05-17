@@ -17,12 +17,17 @@ class GANForTimeSeq:
         # g_network data flow
         self.g_inputTensor = tf.placeholder(tf.float32, shape=(None, self.seq_len)) 
         g_logit = self.generator(self.g_inputTensor)
-        
+        tf.summary.histogram('g_net_input', self.g_inputTensor)
+
         # d-network data flow
         self.groundTruthTensor = tf.placeholder(tf.float32,shape=(None, self.seq_len, 1),name='gndTruth')
+        self.sum_gnd_truth = tf.summary.tensor_summary('gnd_truth', self.groundTruthTensor)
         self.d_logit_gnd_truth = self.discriminator(self.groundTruthTensor, None)
+        self.sum_d_logit_gnd = tf.summary.tensor_summary('d_logit_gnd_truth', self.d_logit_gnd_truth)
         self.g_logit = tf.reshape(g_logit, [-1, self.seq_len, 1])
+        self.sum_g_logit = tf.summary.tensor_summary('g_logit', self.g_logit)
         self.d_logit_fake = self.discriminator(self.g_logit, True)
+        self.sum_d_logit_fake = tf.summary.tensor_summary('d_logit_fake', self.d_logit_fake)
         
         # define loss function
         with tf.name_scope('Loss'):
@@ -115,13 +120,15 @@ class GANForTimeSeq:
                                 self.groundTruthTensor:gnd_truth_batch,
                                 self.g_inputTensor:g_net_input})
 
-                summary, g_logit, d_logit_fake,d_logit_gnd_truth = self.sess.run([self.merged,self.g_logit,self.d_logit_fake, self.d_logit_gnd_truth], 
+                summary, g_logit, d_logit_fake,d_logit_gnd_truth, sum_gnd_truth = self.sess.run(
+                        [self.merged,self.g_logit,self.d_logit_fake, self.d_logit_gnd_truth, self.sum_gnd_truth], 
                         feed_dict={
                             self.batch_size_t:batch_size, 
                             self.groundTruthTensor:gnd_truth_batch,
                             self.g_inputTensor:g_net_input})
 
             self.tf_writer.add_summary(summary, iterIdx)
+            self.tf_writer.add_summary(sum_gnd_truth, iterIdx)
             self.tf_writer.flush()
             if iterIdx % 100 == 0:
                 print 'IterIdx=', iterIdx, ' g_logit[0]=', g_logit[0]
@@ -134,18 +141,17 @@ class GANForTimeSeq:
     # input tensor must be in shape of (batch_size, self.seq_len)
     def generator(self, inputTensor):
         with tf.name_scope('G_net'):
-            numberOfInputDims = self.seq_len
+            numNodesInEachLayer = 10
+            numLayers = 5 
+            
             gInputTensor = tf.identity(inputTensor, name='input')
-            activation_fc1,z_fc1 = self.fullConnectedLayer(gInputTensor, self.seq_len, 1);
-            tf.summary.histogram('z_fc1', z_fc1)
-            tf.summary.histogram('activation_fc1', activation_fc1)
-            activation_fc2,z_fc2 = self.fullConnectedLayer(activation_fc1, self.seq_len, 2);
-            tf.summary.histogram('z_fc2', z_fc2)
-            tf.summary.histogram('activation_fc2', activation_fc2)
-            activation_fc3,z_fc3 = self.fullConnectedLayer(activation_fc1, self.seq_len, 3);
-            tf.summary.histogram('z_fc3', z_fc3)
-            tf.summary.histogram('activation_fc3', activation_fc3)
-            g_logit = z_fc3
+            previous_output_tensor = gInputTensor
+            for layerIdx in range(numLayers):
+                activation,z = self.fullConnectedLayer(previous_output_tensor, numNodesInEachLayer, layerIdx)
+                previous_output_tensor = activation
+                tf.summary.histogram('z_'+str(layerIdx), z)
+                tf.summary.histogram('activation_fc'+str(layerIdx), activation)
+            g_logit = z
             g_logit = tf.identity(g_logit, 'g_logit')
             return g_logit
 
@@ -156,7 +162,7 @@ class GANForTimeSeq:
         with tf.name_scope('D_net'):
             num_units_in_LSTMCell = 10
             lstmCell = tf.contrib.rnn.BasicLSTMCell(num_units_in_LSTMCell,reuse=reuseCell)
-            init_state = lstmCell.zero_state(100, dtype=tf.float32)
+            init_state = lstmCell.zero_state(self.batch_size_t, dtype=tf.float32)
             raw_output, final_state = tf.nn.dynamic_rnn(lstmCell, inputTensor, initial_state=init_state)
             rnn_output_list = tf.unstack(tf.transpose(raw_output, [1, 0, 2]), name='outList')
             rnn_output_tensor = rnn_output_list[-1];
