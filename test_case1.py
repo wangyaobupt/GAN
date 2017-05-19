@@ -34,7 +34,11 @@ if __name__ == '__main__':
     
     removeFileInDir("tf_writer")
 
-    gndTruthData = genData(n_samples, len_data);
+    #gndTruthData = genData(n_samples, len_data);
+    gndTruthData = np.ones((n_samples, len_data)) * np.linspace(1, 10, 10)
+    gndTruthData = np.reshape(gndTruthData, [-1, len_data, 1])
+    print gndTruthData[0]
+    noise_data = np.linspace(-1, 1, len_data) + 0.005*np.random.randn(n_samples, len_data)
 
-    gan = GANForTimeSeq(len_data, lr_g=0.01, lr_d=0.03)
-    gan.train(batch_size, n_iter, gndTruthData)
+    gan = GANForTimeSeq(len_data, lr_g=0.05, lr_d=0.001)
+    gan.train(batch_size, n_iter, gndTruthData, noise_data)

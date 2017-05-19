@@ -98,7 +98,7 @@ class GANForTimeSeq:
     # batch_size: how many sample trained inone batch
     # numIteration: number of interation loops
     # gnd_ruth_tensor: ground truth tensor, in shape of (n_samples, seq_len, 1)
-    def train(self, batch_size, numIteration, gnd_truth_tensor):
+    def train(self, batch_size, numIteration, gnd_truth_tensor, g_net_input_tensor):
         n_samples = gnd_truth_tensor.shape[0]
         sample_len = gnd_truth_tensor.shape[1]
         n_batches = n_samples / batch_size
@@ -106,7 +106,10 @@ class GANForTimeSeq:
         for iterIdx in range(numIteration):
             for batchIdx in range(n_batches):
                 gnd_truth_batch = gnd_truth_tensor[batchIdx*batch_size:(batchIdx+1)*batch_size]
-                g_net_input = np.random.uniform(-1,1,(batch_size,sample_len))
+                if (g_net_input_tensor != None):
+                    g_net_input = g_net_input_tensor[batchIdx*batch_size:(batchIdx+1)*batch_size]
+                else:
+                    g_net_input = np.random.uniform(-1,1,(batch_size,sample_len))
                 
                 for index in range(1):
                     self.sess.run(self.train_d, 
@@ -115,7 +118,7 @@ class GANForTimeSeq:
                             self.groundTruthTensor:gnd_truth_batch, 
                             self.g_inputTensor:g_net_input})
 
-                for index in range(10):
+                for index in range(1):
                     self.sess.run(self.train_g, 
                             feed_dict={
                                 self.batch_size_t:batch_size, 
