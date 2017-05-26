@@ -27,21 +27,21 @@ def removeFileInDir(targetDir):
 
 
 if __name__ == '__main__':
-    n_samples = 1000
+    n_samples = 10000
     batch_size = 1000
     len_data = 10
-    n_iter = 1000000
+    n_iter = 10000
     
     removeFileInDir("tf_writer")
 
     #gndTruthData = genData(n_samples, len_data);
-    #gndTruthData = (np.ones((n_samples, len_data)) * np.linspace(1, 10, 10)) + 0.3*np.random.randn(n_samples, len_data)
-    gndTruthData = np.random.randn(n_samples, len_data)
+    gndTruthData = (np.ones((n_samples, len_data)) * np.linspace(1, 10, 10)) + 0.3*np.random.randn(n_samples, len_data)
+    #gndTruthData = np.random.randn(n_samples, len_data)
     gndTruthData = np.reshape(gndTruthData, [-1, len_data, 1])
     #print gndTruthData[0]
     #noise_data = np.linspace(-1, 1, len_data) + 0.005*np.random.randn(n_samples, len_data)
     noise_data = np.random.uniform(-1, 1, size =(n_samples, len_data))
     g_label_tensor  = np.random.randn(batch_size, len_data)
 
-    gan = GANForTimeSeq(len_data, lr_g=0.01, lr_d=0.001)
+    gan = GANForTimeSeq(len_data, lr_g=0.01, lr_d=0.001, useGPU=False)
     gan.train(batch_size, n_iter, gndTruthData, noise_data, g_label_tensor)
