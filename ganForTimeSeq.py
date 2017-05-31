@@ -11,17 +11,17 @@ class GANForTimeSeq:
         self.lr_d = lr_d
         self.n_classes = 2
 
-        # define common parameter
-        self.batch_size_t = tf.placeholder(tf.int32, None)
+        # define common parameter, it is a scalar
+        self.batch_size_t = tf.placeholder(tf.int32, shape=[])
         
         # g_network data flow
         self.g_inputTensor = tf.placeholder(tf.float32, shape=(None, self.seq_len))
-        self.g_inputLabel = tf.placeholder(tf.float32, shape=[None, self.seq_len])
+        self.g_inputLabel = tf.placeholder(tf.float32, shape=(None, self.seq_len))
         g_logit = self.generator(self.g_inputTensor)
         tf.summary.histogram('g_net_input', self.g_inputTensor)
 
         # d-network data flow
-        self.groundTruthTensor = tf.placeholder(tf.float32,shape=(None, self.seq_len, 1),name='gndTruth')
+        self.groundTruthTensor = tf.placeholder(tf.float32,shape=(None,self.seq_len, 1),name='gndTruth')
         self.sum_gnd_truth = tf.summary.tensor_summary('gnd_truth', self.groundTruthTensor)
         tf.summary.histogram('gnd_truth', self.groundTruthTensor)
         self.d_logit_gnd_truth = self.discriminator(self.groundTruthTensor, None)
@@ -38,7 +38,7 @@ class GANForTimeSeq:
             g_loss_d = tf.reduce_mean(
                 tf.nn.sigmoid_cross_entropy_with_logits(
                     logits=self.d_logit_fake,
-                    labels=tf.ones(shape=[self.batch_size_t,1])
+                    labels=tf.ones(shape=[tf.reduce_mean(self.batch_size_t),1])
                     ),
                 name='g_loss_d'
                 )
@@ -60,7 +60,7 @@ class GANForTimeSeq:
             d_loss_ground_truth = tf.reduce_mean(
                 tf.nn.sigmoid_cross_entropy_with_logits(
                     logits=self.d_logit_gnd_truth,
-                    labels=tf.ones(shape=[self.batch_size_t,1])
+                    labels=tf.ones(shape=[tf.reduce_mean(self.batch_size_t),1])
                     ),
                 name='d_loss_gnd'
                 )
@@ -68,7 +68,7 @@ class GANForTimeSeq:
             d_loss_fake = tf.reduce_mean(
                 tf.nn.sigmoid_cross_entropy_with_logits(
                     logits=self.d_logit_fake,
-                    labels=tf.zeros(shape=[self.batch_size_t,1])
+                    labels=tf.zeros(shape=[tf.reduce_mean(self.batch_size_t),1])
                     ),
                 name='d_loss_fake'
                 )
@@ -77,11 +77,11 @@ class GANForTimeSeq:
             tf.summary.scalar('d_loss',d_loss)
 
         with tf.name_scope('Accuracy'):
-            correct_pred_gnd_truth = tf.greater(self.d_logit_gnd_truth, tf.zeros([self.batch_size_t, 1]))
+            correct_pred_gnd_truth = tf.greater(self.d_logit_gnd_truth, tf.zeros([tf.reduce_mean(self.batch_size_t), 1]))
             d_accuracy_gnd_truth = tf.reduce_mean(tf.cast(correct_pred_gnd_truth, tf.float32))
             tf.summary.scalar('d_acc_gnd_truth',d_accuracy_gnd_truth)
             
-            correct_pred_fake = tf.less(self.d_logit_fake, tf.zeros([self.batch_size_t, 1]))
+            correct_pred_fake = tf.less(self.d_logit_fake, tf.zeros([tf.reduce_mean(self.batch_size_t), 1]))
             d_accuracy_fake = tf.reduce_mean(tf.cast(correct_pred_fake, tf.float32))
             tf.summary.scalar('d_acc_fake', d_accuracy_fake)
 
@@ -119,7 +119,7 @@ class GANForTimeSeq:
         for iterIdx in range(numIteration):
             for batchIdx in range(n_batches):
                 gnd_truth_batch = gnd_truth_tensor[batchIdx*batch_size:(batchIdx+1)*batch_size]
-                if (g_net_input_tensor != None):
+                if (g_net_input_tensor.any()):
                     g_net_input = g_net_input_tensor[batchIdx*batch_size:(batchIdx+1)*batch_size]
                 else:
                     g_net_input = np.random.uniform(-1,1,(batch_size,sample_len))
@@ -234,7 +234,7 @@ class GANForTimeSeq:
         return a, z
 
     def genOneHotVector(self, class_idx):
-        indices = tf.ones([self.batch_size_t],dtype=tf.int32)*class_idx
+        indices = tf.ones([tf.reduce_mean(self.batch_size_t)],dtype=tf.int32)*class_idx
         result = tf.one_hot(indices, depth=self.n_classes, on_value = 1.0, off_value = 0.0)
         return result;
 
