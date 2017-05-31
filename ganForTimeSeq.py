@@ -165,7 +165,7 @@ class GANForTimeSeq:
             gInputTensor = tf.identity(inputTensor, name='input')
             # Multilayer percepton implementation
             numNodesInEachLayer = 10
-            numLayers = 2 
+            numLayers = 3 
             
             previous_output_tensor = gInputTensor
             for layerIdx in range(numLayers):
