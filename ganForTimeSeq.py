@@ -44,7 +44,7 @@ class GANForTimeSeq:
                 )
             tf.summary.scalar('g_loss_d',g_loss_d)
            
-            # use G_label to assist train of G network
+           # use G_label to assist train of G network
            # g_loss_label = tf.reduce_mean(
            #     tf.nn.l2_loss(
            #         g_logit - self.g_inputLabel
@@ -119,7 +119,7 @@ class GANForTimeSeq:
         for iterIdx in range(numIteration):
             for batchIdx in range(n_batches):
                 gnd_truth_batch = gnd_truth_tensor[batchIdx*batch_size:(batchIdx+1)*batch_size]
-                if (g_net_input_tensor.any()):
+                if not (g_net_input_tensor is None):
                     g_net_input = g_net_input_tensor[batchIdx*batch_size:(batchIdx+1)*batch_size]
                 else:
                     g_net_input = np.random.uniform(-1,1,(batch_size,sample_len))
